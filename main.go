@@ -21,6 +21,41 @@ type RequestInfo struct {
 	IsBot         bool
 	BotConfidence float64
 	Reasons       []string
+	// New fields for enhanced detection
+	HeaderIntegrity   map[string]bool
+	TLSFingerprint    string
+	TimeOnSite        time.Duration
+	JSChallengePassed bool
+	BehaviorData      *BehaviorData
+	PathRequestCounts map[string]int
+	LastCaptchaCheck  time.Time
+	CaptchaVerified   bool
+	DNSInfo           *DNSInfo
+	IPReputation      *IPReputation
+}
+
+// BehaviorData stores user behavior metrics
+type BehaviorData struct {
+	MouseMovements    int
+	ScrollEvents      int
+	KeyPresses        int
+	LastActivity      time.Time
+	AverageTimeOnPage time.Duration
+}
+
+// DNSInfo stores DNS lookup results
+type DNSInfo struct {
+	Hostnames   []string
+	LastChecked time.Time
+	IsKnownBot  bool
+}
+
+// IPReputation stores IP reputation data
+type IPReputation struct {
+	Score         float64
+	LastChecked   time.Time
+	IsBlacklisted bool
+	ThreatLevel   string
 }
 
 // BotDetectionConfig holds configuration for bot detection
@@ -29,6 +64,15 @@ type BotDetectionConfig struct {
 	MaxRequestsPerHour   int
 	SuspiciousUserAgents []string
 	WindowSize           time.Duration
+	// New configuration options
+	RequiredHeaders      []string
+	HoneypotPaths        []string
+	CaptchaThreshold     float64
+	MinTimeOnSite        time.Duration
+	MaxRequestsPerPath   int
+	IPReputationAPIKey   string
+	EnableTLSFingerprint bool
+	EnableDNSLookup      bool
 }
 
 // Global variables
@@ -43,6 +87,20 @@ var (
 			"curl", "wget", "apache-httpclient", "java-http-client",
 		},
 		WindowSize: time.Minute,
+		RequiredHeaders: []string{
+			"Accept", "Accept-Encoding", "Accept-Language", "Connection",
+			"Referer", "DNT", "Sec-Fetch-Dest", "Sec-Fetch-Mode",
+			"Sec-Fetch-Site", "Sec-Fetch-User",
+		},
+		HoneypotPaths: []string{
+			"/fake-login", "/fake-register", "/fake-checkout",
+			"/admin-panel", "/wp-login.php",
+		},
+		CaptchaThreshold:     0.4,
+		MinTimeOnSite:        time.Second * 3,
+		MaxRequestsPerPath:   50,
+		EnableTLSFingerprint: true,
+		EnableDNSLookup:      true,
 	}
 )
 
@@ -102,13 +160,13 @@ func performBotChecks(info *RequestInfo, r *http.Request) {
 	info.Reasons = []string{}
 	info.BotConfidence = 0.0
 
-	// Check request frequency
+	// 1. Check request frequency
 	if info.Count > config.MaxRequestsPerMinute {
 		info.Reasons = append(info.Reasons, "high request frequency")
 		info.BotConfidence += 0.4
 	}
 
-	// Check user agent
+	// 2. Check user agent
 	userAgent := strings.ToLower(r.UserAgent())
 	for _, suspicious := range config.SuspiciousUserAgents {
 		if strings.Contains(userAgent, suspicious) {
@@ -118,20 +176,107 @@ func performBotChecks(info *RequestInfo, r *http.Request) {
 		}
 	}
 
-	// Check request pattern
-	if len(info.RequestPaths) > 1 {
-		// Check for rapid repeated requests to the same endpoint
-		lastPath := info.RequestPaths[len(info.RequestPaths)-2]
-		currentPath := info.RequestPaths[len(info.RequestPaths)-1]
-		if lastPath == currentPath &&
-			info.RequestTimes[len(info.RequestTimes)-1].Sub(info.RequestTimes[len(info.RequestTimes)-2]) < time.Second {
-			info.Reasons = append(info.Reasons, "repetitive request pattern")
+	// 3. Header Integrity Check
+	missingHeaders := []string{}
+	for _, header := range config.RequiredHeaders {
+		if r.Header.Get(header) == "" {
+			missingHeaders = append(missingHeaders, header)
+		}
+	}
+	if len(missingHeaders) > 0 {
+		info.Reasons = append(info.Reasons, "missing common headers: "+strings.Join(missingHeaders, ", "))
+		info.BotConfidence += 0.2
+	}
+
+	// 4. TLS Fingerprint Check
+	if config.EnableTLSFingerprint {
+		tlsFingerprint := r.Header.Get("Cf-Tls-Fingerprint")
+		if tlsFingerprint != "" {
+			info.TLSFingerprint = tlsFingerprint
+			// Add logic to check against known bot fingerprints
+			if isKnownBotFingerprint(tlsFingerprint) {
+				info.Reasons = append(info.Reasons, "suspicious TLS fingerprint")
+				info.BotConfidence += 0.3
+			}
+		}
+	}
+
+	// 5. Time-on-Site Check
+	if info.TimeOnSite < config.MinTimeOnSite {
+		info.Reasons = append(info.Reasons, "suspiciously low time on site")
+		info.BotConfidence += 0.2
+	}
+
+	// 6. JavaScript Challenge Check
+	if !info.JSChallengePassed {
+		info.Reasons = append(info.Reasons, "failed JavaScript challenge")
+		info.BotConfidence += 0.4
+	}
+
+	// 7. Behavior Analysis
+	if info.BehaviorData != nil {
+		if info.BehaviorData.MouseMovements == 0 && info.BehaviorData.ScrollEvents == 0 {
+			info.Reasons = append(info.Reasons, "no user behavior detected")
+			info.BotConfidence += 0.3
+		}
+	}
+
+	// 8. Path-based Rate Limiting
+	path := r.URL.Path
+	if count, exists := info.PathRequestCounts[path]; exists && count > config.MaxRequestsPerPath {
+		info.Reasons = append(info.Reasons, "excessive requests to path: "+path)
+		info.BotConfidence += 0.3
+	}
+
+	// 9. Honeypot Check
+	for _, honeypotPath := range config.HoneypotPaths {
+		if strings.Contains(path, honeypotPath) {
+			info.Reasons = append(info.Reasons, "triggered honeypot")
+			info.BotConfidence += 0.5
+			break
+		}
+	}
+
+	// 10. DNS Lookup Check
+	if config.EnableDNSLookup && info.DNSInfo != nil {
+		if info.DNSInfo.IsKnownBot {
+			info.Reasons = append(info.Reasons, "known bot IP")
+			info.BotConfidence += 0.4
+		}
+	}
+
+	// 11. IP Reputation Check
+	if info.IPReputation != nil {
+		if info.IPReputation.IsBlacklisted {
+			info.Reasons = append(info.Reasons, "blacklisted IP")
+			info.BotConfidence += 0.5
+		}
+		if info.IPReputation.Score > 0.7 {
+			info.Reasons = append(info.Reasons, "high risk IP")
 			info.BotConfidence += 0.3
 		}
 	}
 
 	// Determine if it's a bot based on confidence
 	info.IsBot = info.BotConfidence >= 0.5
+}
+
+// isKnownBotFingerprint checks if a TLS fingerprint matches known bot patterns
+func isKnownBotFingerprint(fingerprint string) bool {
+	// Add your known bot fingerprint patterns here
+	knownBotPatterns := []string{
+		"python-requests",
+		"curl",
+		"wget",
+		"java-http-client",
+	}
+
+	for _, pattern := range knownBotPatterns {
+		if strings.Contains(strings.ToLower(fingerprint), pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 // botDetectionHandler handles incoming requests
@@ -194,12 +339,105 @@ func startFrontendServer() {
 	go http.ListenAndServe(":3000", nil)
 }
 
+// jsChallengeHandler handles JavaScript challenge verification
+func jsChallengeHandler(w http.ResponseWriter, r *http.Request) {
+	ip := getIP(r)
+
+	mu.Lock()
+	info, exists := requests[ip]
+	if !exists {
+		info = &RequestInfo{
+			FirstSeen: time.Now(),
+			LastSeen:  time.Now(),
+		}
+		requests[ip] = info
+	}
+	info.JSChallengePassed = true
+	mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"message": "JavaScript challenge passed",
+	})
+}
+
+// behaviorTrackingHandler handles user behavior data
+func behaviorTrackingHandler(w http.ResponseWriter, r *http.Request) {
+	ip := getIP(r)
+
+	var behaviorData BehaviorData
+	if err := json.NewDecoder(r.Body).Decode(&behaviorData); err != nil {
+		http.Error(w, "Invalid behavior data", http.StatusBadRequest)
+		return
+	}
+
+	mu.Lock()
+	info, exists := requests[ip]
+	if !exists {
+		info = &RequestInfo{
+			FirstSeen: time.Now(),
+			LastSeen:  time.Now(),
+		}
+		requests[ip] = info
+	}
+	info.BehaviorData = &behaviorData
+	mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"message": "Behavior data recorded",
+	})
+}
+
+// timeOnSiteHandler handles time-on-site tracking
+func timeOnSiteHandler(w http.ResponseWriter, r *http.Request) {
+	ip := getIP(r)
+
+	var data struct {
+		TimeSpent time.Duration `json:"time_spent"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		http.Error(w, "Invalid time data", http.StatusBadRequest)
+		return
+	}
+
+	mu.Lock()
+	info, exists := requests[ip]
+	if !exists {
+		info = &RequestInfo{
+			FirstSeen: time.Now(),
+			LastSeen:  time.Now(),
+		}
+		requests[ip] = info
+	}
+	info.TimeOnSite = data.TimeSpent
+	mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"message": "Time on site recorded",
+	})
+}
+
 func main() {
 	// Start frontend server
 	startFrontendServer()
 
 	// Start bot detection API
 	http.HandleFunc("/analyze", corsMiddleware(botDetectionHandler))
-	log.Println("✅ Bot Detection API running at http://localhost:8080/analyze")
+	http.HandleFunc("/js-challenge", corsMiddleware(jsChallengeHandler))
+	http.HandleFunc("/behavior", corsMiddleware(behaviorTrackingHandler))
+	http.HandleFunc("/time-on-site", corsMiddleware(timeOnSiteHandler))
+
+	log.Println("✅ Bot Detection API running at http://localhost:8080")
+	log.Println("Available endpoints:")
+	log.Println("  - /analyze: Main bot detection endpoint")
+	log.Println("  - /js-challenge: JavaScript challenge verification")
+	log.Println("  - /behavior: User behavior tracking")
+	log.Println("  - /time-on-site: Time on site tracking")
+
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

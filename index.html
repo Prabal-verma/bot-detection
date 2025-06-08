@@ -3,277 +3,791 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bot Detection Dashboard</title>
+    <title>Advanced Bot Detection Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        .detection-card {
+            transition: all 0.3s ease;
         }
-
-        body {
-            background-color: #f5f5f5;
-            padding: 20px;
+        .detection-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
+        .method-active {
+            border-left: 4px solid #10B981;
         }
-
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .header h1 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-
-        .header p {
-            color: #666;
-        }
-
-        .dashboard {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .card {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .card h2 {
-            color: #333;
-            margin-bottom: 15px;
-            font-size: 1.2em;
-        }
-
-        .status {
-            display: flex;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .status-indicator {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 10px;
-        }
-
-        .status-indicator.bot {
-            background-color: #ff4444;
-        }
-
-        .status-indicator.human {
-            background-color: #00C851;
-        }
-
-        .details {
-            margin-top: 20px;
-        }
-
-        .details p {
-            margin: 5px 0;
-            color: #666;
-        }
-
-        .details strong {
-            color: #333;
-        }
-
-        .reasons {
-            margin-top: 15px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 5px;
-        }
-
-        .reasons ul {
-            list-style: none;
-            margin-left: 10px;
-        }
-
-        .reasons li {
-            color: #666;
-            margin: 5px 0;
-        }
-
-        .confidence-meter {
-            width: 100%;
-            height: 10px;
-            background: #eee;
-            border-radius: 5px;
-            margin-top: 10px;
-            overflow: hidden;
-        }
-
-        .confidence-level {
-            height: 100%;
-            background: linear-gradient(90deg, #00C851, #ff4444);
-            transition: width 0.3s ease;
-        }
-
-        .refresh-button {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 1em;
-            transition: background 0.3s ease;
-        }
-
-        .refresh-button:hover {
-            background: #0056b3;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #666;
-        }
-
-        @media (max-width: 768px) {
-            .dashboard {
-                grid-template-columns: 1fr;
-            }
+        .method-triggered {
+            border-left: 4px solid #EF4444;
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Bot Detection Dashboard</h1>
-            <p>Real-time analysis of request patterns and bot detection</p>
-        </div>
-
-        <div class="dashboard">
-            <div class="card">
-                <h2>Current Request Analysis</h2>
-                <div id="currentStatus" class="status">
-                    <div class="status-indicator"></div>
-                    <span>Analyzing...</span>
-                </div>
-                <div class="details">
-                    <p><strong>IP Address:</strong> <span id="ipAddress">-</span></p>
-                    <p><strong>Request Count:</strong> <span id="requestCount">-</span></p>
-                    <p><strong>User Agent:</strong> <span id="userAgent">-</span></p>
-                    <p><strong>First Seen:</strong> <span id="firstSeen">-</span></p>
-                    <p><strong>Last Seen:</strong> <span id="lastSeen">-</span></p>
-                </div>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-4xl font-bold mb-8 text-center">Advanced Bot Detection Dashboard</h1>
+        
+        <!-- Overall Status -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-semibold">Detection Status</h2>
+                <div id="overallStatus" class="px-4 py-2 rounded-full text-white"></div>
             </div>
-
-            <div class="card">
-                <h2>Bot Detection Results</h2>
-                <div class="details">
-                    <p><strong>Bot Confidence:</strong> <span id="botConfidence">-</span></p>
-                    <div class="confidence-meter">
-                        <div id="confidenceLevel" class="confidence-level" style="width: 0%"></div>
-                    </div>
-                    <div class="reasons">
-                        <h3>Detection Reasons:</h3>
-                        <ul id="reasonsList"></ul>
-                    </div>
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="p-4 bg-gray-50 rounded">
+                    <h3 class="font-medium">Bot Confidence</h3>
+                    <p id="confidence" class="text-2xl font-bold">0%</p>
+                </div>
+                <div class="p-4 bg-gray-50 rounded">
+                    <h3 class="font-medium">Active Methods</h3>
+                    <p id="activeMethods" class="text-2xl font-bold">0/10</p>
+                </div>
+                <div class="p-4 bg-gray-50 rounded">
+                    <h3 class="font-medium">Request Count</h3>
+                    <p id="requestCount" class="text-2xl font-bold">0</p>
                 </div>
             </div>
         </div>
 
-        <div style="text-align: center;">
-            <button class="refresh-button" onclick="analyzeRequest()">Analyze New Request</button>
+        <!-- Detection Methods Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Header Integrity -->
+            <div id="headerIntegrity" class="detection-card bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold mb-2">Header Integrity</h3>
+                <p class="text-gray-600 mb-4">Checks for presence of common browser headers</p>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span>Accept</span>
+                        <span id="header-accept" class="text-gray-500">-</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Accept-Language</span>
+                        <span id="header-language" class="text-gray-500">-</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>User-Agent</span>
+                        <span id="header-useragent" class="text-gray-500">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Behavior Analysis -->
+            <div id="behaviorAnalysis" class="detection-card bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold mb-2">Behavior Analysis</h3>
+                <p class="text-gray-600 mb-4">Tracks mouse, scroll, and keyboard patterns</p>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span>Mouse Movements</span>
+                        <span id="behavior-mouse" class="text-gray-500">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Scroll Events</span>
+                        <span id="behavior-scroll" class="text-gray-500">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Key Presses</span>
+                        <span id="behavior-keys" class="text-gray-500">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Time Analysis -->
+            <div id="timeAnalysis" class="detection-card bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold mb-2">Time Analysis</h3>
+                <p class="text-gray-600 mb-4">Analyzes time patterns and request frequency</p>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span>Time on Site</span>
+                        <span id="time-onsite" class="text-gray-500">00:00:00</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Requests/Minute</span>
+                        <span id="time-requests" class="text-gray-500">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Average Interval</span>
+                        <span id="time-interval" class="text-gray-500">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- JavaScript Challenge -->
+            <div id="jsChallenge" class="detection-card bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold mb-2">JavaScript Challenge</h3>
+                <p class="text-gray-600 mb-4">Verifies JavaScript execution capability</p>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span>Challenge Status</span>
+                        <span id="js-status" class="text-gray-500">Pending</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Execution Time</span>
+                        <span id="js-time" class="text-gray-500">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Request Pattern -->
+            <div id="requestPattern" class="detection-card bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold mb-2">Request Pattern</h3>
+                <p class="text-gray-600 mb-4">Analyzes request patterns and paths</p>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span>Unique Paths</span>
+                        <span id="pattern-paths" class="text-gray-500">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Repeated Requests</span>
+                        <span id="pattern-repeated" class="text-gray-500">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TLS Fingerprint -->
+            <div id="tlsFingerprint" class="detection-card bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold mb-2">TLS Fingerprint</h3>
+                <p class="text-gray-600 mb-4">Analyzes TLS client characteristics</p>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span>Fingerprint</span>
+                        <span id="tls-fingerprint" class="text-gray-500">-</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Risk Level</span>
+                        <span id="tls-risk" class="text-gray-500">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Controls -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-semibold mb-4">Test Controls</h2>
+            
+            <!-- Basic Tests -->
+            <div class="mb-6">
+                <h3 class="text-lg font-medium mb-3">Basic Tests</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="p-4 bg-gray-50 rounded">
+                        <h4 class="font-medium mb-2">Simulate Human Behavior</h4>
+                        <button onclick="simulateHumanBehavior()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                            Simulate Human
+                        </button>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded">
+                        <h4 class="font-medium mb-2">Simulate Bot Behavior</h4>
+                        <button onclick="simulateBotBehavior()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
+                            Simulate Bot
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advanced Test Requests -->
+            <div class="mb-6">
+                <h3 class="text-lg font-medium mb-3">Advanced Test Requests</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Python Requests -->
+                    <div class="p-4 bg-gray-50 rounded">
+                        <h4 class="font-medium mb-2">Python Requests</h4>
+                        <button onclick="testPythonRequests()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                            Test Python
+                        </button>
+                    </div>
+
+                    <!-- cURL Requests -->
+                    <div class="p-4 bg-gray-50 rounded">
+                        <h4 class="font-medium mb-2">cURL Requests</h4>
+                        <button onclick="testCurlRequests()" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">
+                            Test cURL
+                        </button>
+                    </div>
+
+                    <!-- Headless Browser -->
+                    <div class="p-4 bg-gray-50 rounded">
+                        <h4 class="font-medium mb-2">Headless Browser</h4>
+                        <button onclick="testHeadlessBrowser()" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">
+                            Test Headless
+                        </button>
+                    </div>
+
+                    <!-- Missing Headers -->
+                    <div class="p-4 bg-gray-50 rounded">
+                        <h4 class="font-medium mb-2">Missing Headers</h4>
+                        <button onclick="testMissingHeaders()" class="bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600">
+                            Test Headers
+                        </button>
+                    </div>
+
+                    <!-- Rapid Requests -->
+                    <div class="p-4 bg-gray-50 rounded">
+                        <h4 class="font-medium mb-2">Rapid Requests</h4>
+                        <button onclick="testRapidRequests()" class="bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600">
+                            Test Speed
+                        </button>
+                    </div>
+
+                    <!-- Suspicious Paths -->
+                    <div class="p-4 bg-gray-50 rounded">
+                        <h4 class="font-medium mb-2">Suspicious Paths</h4>
+                        <button onclick="testSuspiciousPaths()" class="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600">
+                            Test Paths
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Request History Chart -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-2xl font-semibold mb-4">Request History</h2>
+            <canvas id="requestChart"></canvas>
         </div>
     </div>
 
     <script>
-        function formatDate(dateString) {
-            return new Date(dateString).toLocaleString();
-        }
+        // Initialize variables
+        let mouseMovements = 0;
+        let scrollEvents = 0;
+        let keyPresses = 0;
+        let startTime = new Date();
+        let requestHistory = [];
+        let chart;
 
-        function updateUI(data) {
-            // Update status indicator
-            const statusIndicator = document.querySelector('.status-indicator');
-            const statusText = document.querySelector('.status span');
-            
-            if (data.is_bot) {
-                statusIndicator.className = 'status-indicator bot';
-                statusText.textContent = 'Bot Detected';
-            } else {
-                statusIndicator.className = 'status-indicator human';
-                statusText.textContent = 'Human User';
-            }
-
-            // Update details
-            document.getElementById('ipAddress').textContent = data.ip;
-            document.getElementById('requestCount').textContent = data.request_count;
-            document.getElementById('userAgent').textContent = data.user_agent;
-            document.getElementById('firstSeen').textContent = formatDate(data.first_seen);
-            document.getElementById('lastSeen').textContent = formatDate(data.last_seen);
-            
-            // Update bot confidence
-            const confidence = (data.bot_confidence * 100).toFixed(1);
-            document.getElementById('botConfidence').textContent = `${confidence}%`;
-            document.getElementById('confidenceLevel').style.width = `${confidence}%`;
-
-            // Update reasons
-            const reasonsList = document.getElementById('reasonsList');
-            reasonsList.innerHTML = '';
-            if (data.reasons && data.reasons.length > 0) {
-                data.reasons.forEach(reason => {
-                    const li = document.createElement('li');
-                    li.textContent = reason;
-                    reasonsList.appendChild(li);
-                });
-            } else {
-                const li = document.createElement('li');
-                li.textContent = 'No suspicious activity detected';
-                reasonsList.appendChild(li);
-            }
-        }
-
-        async function analyzeRequest() {
-            try {
-                const response = await fetch('http://localhost:8080/analyze', {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                    },
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+        // Initialize Chart.js
+        function initChart() {
+            const ctx = document.getElementById('requestChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Requests per Minute',
+                        data: [],
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
                 }
+            });
+        }
 
-                const data = await response.json();
-                updateUI(data);
-            } catch (error) {
-                console.error('Error analyzing request:', error);
-                // Update UI to show error state
-                document.querySelector('.status-indicator').className = 'status-indicator';
-                document.querySelector('.status span').textContent = 'Error';
-                document.getElementById('reasonsList').innerHTML = `
-                    <li style="color: #ff4444;">
-                        Error connecting to the bot detection API. 
-                        Make sure the server is running at http://localhost:8080
-                    </li>
-                `;
+        // Update time on site
+        function updateTimeOnSite() {
+            const now = new Date();
+            const diff = now - startTime;
+            const hours = Math.floor(diff / 3600000);
+            const minutes = Math.floor((diff % 3600000) / 60000);
+            const seconds = Math.floor((diff % 60000) / 1000);
+            document.getElementById('time-onsite').textContent = 
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // Track user behavior
+        function trackBehavior() {
+            // Mouse movements
+            document.addEventListener('mousemove', () => {
+                mouseMovements++;
+                document.getElementById('behavior-mouse').textContent = mouseMovements;
+                sendBehaviorData();
+            });
+
+            // Scroll events
+            document.addEventListener('scroll', () => {
+                scrollEvents++;
+                document.getElementById('behavior-scroll').textContent = scrollEvents;
+                sendBehaviorData();
+            });
+
+            // Key presses
+            document.addEventListener('keydown', () => {
+                keyPresses++;
+                document.getElementById('behavior-keys').textContent = keyPresses;
+                sendBehaviorData();
+            });
+        }
+
+        // Send behavior data to server
+        function sendBehaviorData() {
+            fetch('http://localhost:8080/behavior', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    mouseMovements,
+                    scrollEvents,
+                    keyPresses,
+                    lastActivity: new Date(),
+                    averageTimeOnPage: new Date() - startTime
+                })
+            });
+        }
+
+        // Send time on site data
+        function sendTimeOnSite() {
+            fetch('http://localhost:8080/time-on-site', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    time_spent: new Date() - startTime
+                })
+            });
+        }
+
+        // Check bot status
+        function checkBotStatus() {
+            fetch('http://localhost:8080/analyze')
+                .then(response => response.json())
+                .then(data => {
+                    showDetectionResults(data);
+                    
+                    // Update request history
+                    requestHistory.push({
+                        time: new Date(),
+                        count: data.request_count
+                    });
+
+                    // Update chart
+                    updateChart();
+                });
+        }
+
+        // Update chart with new data
+        function updateChart() {
+            const labels = requestHistory.map(r => 
+                r.time.toLocaleTimeString()
+            );
+            const data = requestHistory.map(r => r.count);
+
+            chart.data.labels = labels;
+            chart.data.datasets[0].data = data;
+            chart.update();
+        }
+
+        // Initialize JavaScript challenge
+        function initJSChallenge() {
+            fetch('http://localhost:8080/js-challenge', {
+                method: 'POST'
+            });
+        }
+
+        // Initialize everything
+        function init() {
+            initChart();
+            initJSChallenge();
+            trackBehavior();
+            
+            // Update time on site every second
+            setInterval(updateTimeOnSite, 1000);
+            
+            // Send time on site data every 5 seconds
+            setInterval(sendTimeOnSite, 5000);
+            
+            // Check bot status every 2 seconds
+            setInterval(checkBotStatus, 2000);
+        }
+
+        // Start the application
+        init();
+
+        // Simulate human behavior
+        function simulateHumanBehavior() {
+            // Simulate natural mouse movements
+            for (let i = 0; i < 10; i++) {
+                setTimeout(() => {
+                    const event = new MouseEvent('mousemove', {
+                        clientX: Math.random() * window.innerWidth,
+                        clientY: Math.random() * window.innerHeight
+                    });
+                    document.dispatchEvent(event);
+                }, i * 200);
+            }
+
+            // Simulate natural scrolling
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    window.scrollBy(0, Math.random() * 100);
+                }, i * 300);
+            }
+
+            // Simulate natural typing
+            for (let i = 0; i < 8; i++) {
+                setTimeout(() => {
+                    const event = new KeyboardEvent('keydown', {
+                        key: String.fromCharCode(65 + Math.floor(Math.random() * 26))
+                    });
+                    document.dispatchEvent(event);
+                }, i * 250);
             }
         }
 
-        // Initial analysis
-        analyzeRequest();
+        // Simulate bot behavior
+        function simulateBotBehavior() {
+            // 1. Rapid, unnatural mouse movements
+            for (let i = 0; i < 100; i++) {
+                setTimeout(() => {
+                    const event = new MouseEvent('mousemove', {
+                        clientX: Math.random() * window.innerWidth,
+                        clientY: Math.random() * window.innerHeight
+                    });
+                    document.dispatchEvent(event);
+                }, i * 20); // Even faster movements
+            }
 
-        // Add periodic refresh
-        setInterval(analyzeRequest, 5000); // Refresh every 5 seconds
+            // 2. Rapid, unnatural scrolling
+            for (let i = 0; i < 50; i++) {
+                setTimeout(() => {
+                    window.scrollBy(0, Math.random() * 1000);
+                }, i * 50); // Even faster scrolling
+            }
+
+            // 3. Rapid, unnatural typing
+            for (let i = 0; i < 100; i++) {
+                setTimeout(() => {
+                    const event = new KeyboardEvent('keydown', {
+                        key: String.fromCharCode(65 + Math.floor(Math.random() * 26))
+                    });
+                    document.dispatchEvent(event);
+                }, i * 20); // Even faster typing
+            }
+
+            // 4. Multiple rapid requests with bot-like headers
+            for (let i = 0; i < 10; i++) {
+                setTimeout(() => {
+                    fetch('http://localhost:8080/analyze', {
+                        headers: {
+                            'User-Agent': 'python-requests/2.28.1',
+                            // Intentionally missing common headers
+                        }
+                    });
+                }, i * 100); // Make 10 requests in quick succession
+            }
+
+            // 5. Simulate rapid form submissions
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    fetch('http://localhost:8080/analyze', {
+                        method: 'POST',
+                        headers: {
+                            'User-Agent': 'python-requests/2.28.1',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            action: 'submit',
+                            data: 'test'
+                        })
+                    });
+                }, i * 150);
+            }
+
+            // 6. Simulate missing JavaScript challenge
+            setTimeout(() => {
+                fetch('http://localhost:8080/analyze', {
+                    headers: {
+                        'User-Agent': 'curl/7.68.0',
+                        'Accept': '*/*'
+                    }
+                });
+            }, 1000);
+
+            // 7. Simulate suspicious request patterns
+            const suspiciousPaths = ['/api/login', '/api/register', '/api/checkout'];
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    fetch(`http://localhost:8080${suspiciousPaths[i % suspiciousPaths.length]}`, {
+                        headers: {
+                            'User-Agent': 'python-requests/2.28.1'
+                        }
+                    });
+                }, i * 200);
+            }
+        }
+
+        // Enhanced showDetectionResults function
+        function showDetectionResults(data) {
+            // Update overall status
+            const overallStatus = document.getElementById('overallStatus');
+            overallStatus.textContent = data.is_bot ? 'Bot Detected' : 'Human';
+            overallStatus.className = `px-4 py-2 rounded-full text-white ${
+                data.is_bot ? 'bg-red-500' : 'bg-green-500'
+            }`;
+
+            // Update confidence and counts
+            document.getElementById('confidence').textContent = `${(data.bot_confidence * 100).toFixed(1)}%`;
+            document.getElementById('requestCount').textContent = data.request_count;
+
+            // Update header integrity
+            updateHeaderIntegrity(data);
+            
+            // Update behavior analysis
+            updateBehaviorAnalysis(data);
+            
+            // Update time analysis
+            updateTimeAnalysis(data);
+            
+            // Update JavaScript challenge
+            updateJSChallenge(data);
+            
+            // Update request pattern
+            updateRequestPattern(data);
+            
+            // Update TLS fingerprint
+            updateTLSFingerprint(data);
+
+            // Update active methods count
+            const activeMethods = document.querySelectorAll('.method-triggered').length;
+            document.getElementById('activeMethods').textContent = `${activeMethods}/10`;
+        }
+
+        function updateHeaderIntegrity(data) {
+            const card = document.getElementById('headerIntegrity');
+            const headers = data.headers || {};
+            
+            document.getElementById('header-accept').textContent = headers.accept || 'Missing';
+            document.getElementById('header-language').textContent = headers['accept-language'] || 'Missing';
+            document.getElementById('header-useragent').textContent = headers['user-agent'] || 'Missing';
+
+            if (headers.missing) {
+                card.classList.add('method-triggered');
+            } else {
+                card.classList.remove('method-triggered');
+            }
+        }
+
+        function updateBehaviorAnalysis(data) {
+            const card = document.getElementById('behaviorAnalysis');
+            const behavior = data.behavior || {};
+            
+            document.getElementById('behavior-mouse').textContent = behavior.mouseMovements || 0;
+            document.getElementById('behavior-scroll').textContent = behavior.scrollEvents || 0;
+            document.getElementById('behavior-keys').textContent = behavior.keyPresses || 0;
+
+            if (behavior.suspicious) {
+                card.classList.add('method-triggered');
+            } else {
+                card.classList.remove('method-triggered');
+            }
+        }
+
+        function updateTimeAnalysis(data) {
+            const card = document.getElementById('timeAnalysis');
+            
+            document.getElementById('time-onsite').textContent = formatTime(data.time_on_site);
+            document.getElementById('time-requests').textContent = data.requests_per_minute || 0;
+            document.getElementById('time-interval').textContent = `${data.average_interval || 0}ms`;
+
+            if (data.time_suspicious) {
+                card.classList.add('method-triggered');
+            } else {
+                card.classList.remove('method-triggered');
+            }
+        }
+
+        function updateJSChallenge(data) {
+            const card = document.getElementById('jsChallenge');
+            
+            document.getElementById('js-status').textContent = data.js_challenge_passed ? 'Passed' : 'Failed';
+            document.getElementById('js-time').textContent = `${data.js_execution_time || 0}ms`;
+
+            if (!data.js_challenge_passed) {
+                card.classList.add('method-triggered');
+            } else {
+                card.classList.remove('method-triggered');
+            }
+        }
+
+        function updateRequestPattern(data) {
+            const card = document.getElementById('requestPattern');
+            
+            document.getElementById('pattern-paths').textContent = data.unique_paths || 0;
+            document.getElementById('pattern-repeated').textContent = data.repeated_requests || 0;
+
+            if (data.pattern_suspicious) {
+                card.classList.add('method-triggered');
+            } else {
+                card.classList.remove('method-triggered');
+            }
+        }
+
+        function updateTLSFingerprint(data) {
+            const card = document.getElementById('tlsFingerprint');
+            
+            document.getElementById('tls-fingerprint').textContent = data.tls_fingerprint || 'Unknown';
+            document.getElementById('tls-risk').textContent = data.tls_risk_level || 'Unknown';
+
+            if (data.tls_suspicious) {
+                card.classList.add('method-triggered');
+            } else {
+                card.classList.remove('method-triggered');
+            }
+        }
+
+        function formatTime(ms) {
+            if (!ms) return '00:00:00';
+            const seconds = Math.floor(ms / 1000);
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Add some CSS for animations
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0% { opacity: 1; }
+                50% { opacity: 0.5; }
+                100% { opacity: 1; }
+            }
+            .animate-pulse {
+                animation: pulse 1s infinite;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            .animate-fade-in {
+                animation: fadeIn 0.5s ease-in;
+            }
+            .bot-detected {
+                animation: shake 0.5s;
+            }
+            @keyframes shake {
+                0%, 100% { transform: translateX(0); }
+                25% { transform: translateX(-5px); }
+                75% { transform: translateX(5px); }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Test Functions
+        function testPythonRequests() {
+            // Simulate Python requests with different User-Agents
+            const pythonUserAgents = [
+                'python-requests/2.28.1',
+                'python-requests/2.27.1',
+                'python-requests/2.26.0',
+                'python-requests/2.25.1'
+            ];
+
+            pythonUserAgents.forEach((ua, index) => {
+                setTimeout(() => {
+                    fetch('http://localhost:8080/analyze', {
+                        headers: {
+                            'User-Agent': ua,
+                            'Accept': '*/*',
+                            'Connection': 'keep-alive'
+                        }
+                    });
+                }, index * 200);
+            });
+        }
+
+        function testCurlRequests() {
+            // Simulate cURL requests with different options
+            const curlUserAgents = [
+                'curl/7.68.0',
+                'curl/7.64.0',
+                'curl/7.58.0',
+                'curl/7.55.1'
+            ];
+
+            curlUserAgents.forEach((ua, index) => {
+                setTimeout(() => {
+                    fetch('http://localhost:8080/analyze', {
+                        headers: {
+                            'User-Agent': ua,
+                            'Accept': '*/*'
+                        }
+                    });
+                }, index * 200);
+            });
+        }
+
+        function testHeadlessBrowser() {
+            // Simulate headless browser requests
+            const headlessUserAgents = [
+                'Mozilla/5.0 (X11; Linux x86_64) HeadlessChrome/91.0.4472.114',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) HeadlessChrome/91.0.4472.114',
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) HeadlessChrome/91.0.4472.114'
+            ];
+
+            headlessUserAgents.forEach((ua, index) => {
+                setTimeout(() => {
+                    fetch('http://localhost:8080/analyze', {
+                    headers: {
+                            'User-Agent': ua,
+                            'Accept': 'text/html,application/xhtml+xml',
+                            'Accept-Language': 'en-US,en;q=0.9'
+                        }
+                    });
+                }, index * 200);
+            });
+        }
+
+        function testMissingHeaders() {
+            // Test with missing common headers
+            const missingHeaderTests = [
+                {}, // No headers
+                { 'User-Agent': 'Mozilla/5.0' }, // Only User-Agent
+                { 'Accept': '*/*' }, // Only Accept
+                { 'Connection': 'keep-alive' } // Only Connection
+            ];
+
+            missingHeaderTests.forEach((headers, index) => {
+                setTimeout(() => {
+                    fetch('http://localhost:8080/analyze', { headers });
+                }, index * 200);
+            });
+        }
+
+        function testRapidRequests() {
+            // Test with rapid, repeated requests
+            for (let i = 0; i < 20; i++) {
+                setTimeout(() => {
+                    fetch('http://localhost:8080/analyze', {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0',
+                            'Accept': '*/*'
+                        }
+                    });
+                }, i * 50); // Very rapid requests
+            }
+        }
+
+        function testSuspiciousPaths() {
+            // Test with suspicious paths
+            const suspiciousPaths = [
+                '/api/login',
+                '/api/register',
+                '/api/checkout',
+                '/admin',
+                '/wp-login.php',
+                '/phpmyadmin',
+                '/.env',
+                '/config.php'
+            ];
+
+            suspiciousPaths.forEach((path, index) => {
+                setTimeout(() => {
+                    fetch(`http://localhost:8080${path}`, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0',
+                            'Accept': '*/*'
+                        }
+                    });
+                }, index * 200);
+            });
+        }
     </script>
 </body>
 </html>
